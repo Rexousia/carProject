@@ -18,6 +18,7 @@ type carInvSchema struct {
 	Mileage     string
 	Price       string
 	Term        string
+	Source      string
 }
 
 func init() {
@@ -48,6 +49,7 @@ func index(w http.ResponseWriter, req *http.Request) {
 		if err != nil {
 			log.Fatalln(err)
 		}
+		//creating variables to store row values inside of
 		var id string
 		var make string
 		var model string
@@ -55,13 +57,21 @@ func index(w http.ResponseWriter, req *http.Request) {
 		var mileage string
 		var price string
 		var term string
+		var source string
 		// ranging over the rows
 		for i, row := range rows {
+			//checking to see if data is loaded inside of an CSV
+			if len(row) == 0 {
+				http.Error(w, "No information inside of CSV", http.StatusBadRequest)
+				break
+			}
+
+			// Don't need to store values on first iteration ++i
 			if i == 0 {
 				continue
 			}
 
-			//storing inside of the variables
+			//inserting data based on length of row
 			if len(row) == 7 {
 
 				id = row[0]
@@ -71,16 +81,18 @@ func index(w http.ResponseWriter, req *http.Request) {
 				mileage = row[4]
 				price = row[5]
 				term = row[6]
+				source = "prettygoodcardeals.com"
 
 			} else {
 
 				id = row[0]
 				make = row[1]
 				model = row[2]
-				description = row[1] + row[2]
-				mileage = row[4]
-				price = row[5]
-				term = row[6]
+				description = ""
+				price = row[3]
+				term = row[4]
+				mileage = row[5]
+				source = "amazingcars.co.uk"
 			}
 
 			//storing inside of the struct
@@ -92,6 +104,7 @@ func index(w http.ResponseWriter, req *http.Request) {
 				Mileage:     mileage,
 				Price:       price,
 				Term:        term,
+				Source:      source,
 			})
 
 		}
