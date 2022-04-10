@@ -1,14 +1,18 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/csv"
 	"log"
 	"net/http"
 	"text/template"
+
+	_ "github.com/go-sql-driver/mysql"
 )
 
 var tpl *template.Template
-var carInv []carInvSchema
+
+var carinv []carInvSchema
 
 type carInvSchema struct {
 	Id          string
@@ -18,7 +22,7 @@ type carInvSchema struct {
 	Mileage     string
 	Price       string
 	Term        string
-	Source      string
+	Provider    string
 }
 
 func init() {
@@ -26,6 +30,7 @@ func init() {
 }
 
 func main() {
+
 	http.HandleFunc("/", index)
 	http.HandleFunc("/uploadCSV", parsedCSV)
 	http.ListenAndServe(":8080", nil)
@@ -34,6 +39,11 @@ func main() {
 func index(w http.ResponseWriter, req *http.Request) {
 
 	if req.Method == http.MethodPost {
+		db, err := sql.Open("mysql", "root:pass1@tcp(127.0.0.1:3306)/carproject")
+		if err != nil {
+			log.Fatal("Unable to open connection to db")
+		}
+		defer db.Close()
 
 		//processing form submisson
 		//opening file
@@ -57,7 +67,22 @@ func index(w http.ResponseWriter, req *http.Request) {
 		var mileage string
 		var price string
 		var term string
-		var source string
+		var provider string
+
+		//not sure if this in the right spot
+		stmt, err := db.Prepare("INSERT INTO carinv(id, make, model, description, price, term, mileage, provider) VALUES(?, ?, ?, ?, ?, ?, ?, ?)")
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer stmt.Close()
+
+		for id, car := range carinv {
+			_, err := stmt.Exec(id, car.Make, car.Model, car.Description, car.Mileage, car.Price, car.Term, car.Provider)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+
 		// ranging over the rows
 		for i, row := range rows {
 			//checking to see if data is loaded inside of an CSV
@@ -81,7 +106,7 @@ func index(w http.ResponseWriter, req *http.Request) {
 				mileage = row[4]
 				price = row[5]
 				term = row[6]
-				source = "prettygoodcardeals.com"
+				provider = "prettygoodcardeals.com"
 
 			} else {
 
@@ -92,11 +117,11 @@ func index(w http.ResponseWriter, req *http.Request) {
 				price = row[3]
 				term = row[4]
 				mileage = row[5]
-				source = "amazingcars.co.uk"
+				provider = "amazingcars.co.uk"
 			}
 
 			//storing inside of the struct
-			carInv = append(carInv, carInvSchema{
+			carinv = append(carinv, carInvSchema{
 				Id:          id,
 				Make:        make,
 				Model:       model,
@@ -104,9 +129,8 @@ func index(w http.ResponseWriter, req *http.Request) {
 				Mileage:     mileage,
 				Price:       price,
 				Term:        term,
-				Source:      source,
+				Provider:    provider,
 			})
-
 		}
 		http.Redirect(w, req, "/uploadCSV", http.StatusSeeOther)
 	}
@@ -119,7 +143,7 @@ func index(w http.ResponseWriter, req *http.Request) {
 
 func parsedCSV(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	err := tpl.ExecuteTemplate(w, "parseddata.gohtml", carInv)
+	err := tpl.ExecuteTemplate(w, "parseddata.gohtml", carinv)
 	if err != nil {
 		log.Fatal("Unable to execute template")
 	}
