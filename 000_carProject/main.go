@@ -3,16 +3,19 @@ package main
 import (
 	"database/sql"
 	"encoding/csv"
+	"errors"
 	"log"
 	"net/http"
+	"strings"
 	"text/template"
 
-	_ "github.com/go-sql-driver/mysql"
+	"github.com/go-sql-driver/mysql"
 )
 
 var tpl *template.Template
 
 var carinv []carInvSchema
+var pipelineCarInv []carInvSchema
 
 type carInvSchema struct {
 	Id          string
@@ -39,7 +42,7 @@ func main() {
 func index(w http.ResponseWriter, req *http.Request) {
 
 	if req.Method == http.MethodPost {
-		db, err := sql.Open("mysql", "root:pass1@tcp(127.0.0.1:3306)/carproject")
+		db, err := sql.Open("mysql", "root:KDaisy!22@tcp(127.0.0.1:3306)/carproject")
 		if err != nil {
 			log.Fatal("Unable to open connection to db")
 		}
@@ -69,20 +72,6 @@ func index(w http.ResponseWriter, req *http.Request) {
 		var term string
 		var provider string
 
-		//not sure if this in the right spot
-		stmt, err := db.Prepare("INSERT INTO carinv(id, make, model, description, price, term, mileage, provider) VALUES(?, ?, ?, ?, ?, ?, ?, ?)")
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer stmt.Close()
-
-		for id, car := range carinv {
-			_, err := stmt.Exec(id, car.Make, car.Model, car.Description, car.Mileage, car.Price, car.Term, car.Provider)
-			if err != nil {
-				log.Fatal(err)
-			}
-		}
-
 		// ranging over the rows
 		for i, row := range rows {
 			//checking to see if data is loaded inside of an CSV
@@ -96,7 +85,7 @@ func index(w http.ResponseWriter, req *http.Request) {
 				continue
 			}
 
-			//inserting data based on length of row
+			//inserting data based on length of row aka number of columns
 			if len(row) == 7 {
 
 				id = row[0]
@@ -104,7 +93,7 @@ func index(w http.ResponseWriter, req *http.Request) {
 				model = row[2]
 				description = row[3]
 				mileage = row[4]
-				price = row[5]
+				price = "£" + row[5]
 				term = row[6]
 				provider = "prettygoodcardeals.com"
 
@@ -114,9 +103,9 @@ func index(w http.ResponseWriter, req *http.Request) {
 				make = row[1]
 				model = row[2]
 				description = ""
+				mileage = strings.Replace(row[5], "k", "000", -1)
 				price = row[3]
 				term = row[4]
-				mileage = row[5]
 				provider = "amazingcars.co.uk"
 			}
 
@@ -131,7 +120,37 @@ func index(w http.ResponseWriter, req *http.Request) {
 				Term:        term,
 				Provider:    provider,
 			})
+
 		}
+		//Preparing what i want to insert into the db
+		stmt, err := db.Prepare("INSERT INTO carinv(id, make, model, description, mileage, price, term, provider) VALUES(?, ?, ?, ?, ?, ?, ?, ?)")
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer stmt.Close()
+
+		//ranging over the slice of struct
+		for _, car := range carinv {
+			//storing each value at the specified key value pair
+			_, err := stmt.Exec(car.Id, car.Make, car.Model, car.Description, car.Mileage, car.Price, car.Term, car.Provider)
+			var mysqlErr *mysql.MySQLError
+
+			//if the ID is duplicate continue
+			//
+			if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 {
+				log.Print("Duplicate ID found: ", car.Id)
+				continue
+			} else if err != nil {
+				log.Fatal(err)
+			}
+		}
+		//data to pipeline inside of /uploadCSV
+		pipelineCarInv = carinv
+
+		//clearing out the carinv variable to keep healthy duplicate logging
+		carinv = []carInvSchema{}
+
+		//redirecting to /uploadCSV
 		http.Redirect(w, req, "/uploadCSV", http.StatusSeeOther)
 	}
 
@@ -141,9 +160,10 @@ func index(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+//displaying data
 func parsedCSV(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	err := tpl.ExecuteTemplate(w, "parseddata.gohtml", carinv)
+	err := tpl.ExecuteTemplate(w, "parseddata.gohtml", pipelineCarInv)
 	if err != nil {
 		log.Fatal("Unable to execute template")
 	}
