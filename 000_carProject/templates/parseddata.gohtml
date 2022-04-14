@@ -5,10 +5,43 @@
     <title>Car Project</title>
 </head>
 <body>
-<h1>Here is some data</h1>
+<h1>Search for the car you would like</h1>
 
-{{range .}}
-<br>{{.}}
+<h3>Preferences:<h3>
+<form method="get" action="/deals">
+<label for="make">Make:</label>
+<select name="make">
+  <option value="" disabled selected hidden>Select</option>
+  <option value="AUDI">Audi</option>
+</select>
+<br>
+<label for="model">Model:</label>
+<select name="model">
+  <option value="" disabled selected hidden>Select</option>
+  <option value="A4">A4</option>
+  <option value="A5">A5</option>
+</select>
+<br>
+<label for="mileage">Mileage:</label>
+<select name="mileage">
+  <option value="" disabled selected hidden>Select</option>
+  <option value="10000">10000</option>
+  <option value="20000">20000</option>
+  <option value="30000">30000</option>
+</select>
+<br>
+<label for="term">Term:</label>
+<select name="term">
+  <option value="" disabled selected hidden>Select</option>
+  <option value="24">24</option>
+  <option value="36">36</option>
+  <option value="48">48</option>
+</select>
+<br>
+    <input type="submit">
+</form>
+{{if .}}
+
 {{end}}
 
 
