@@ -32,10 +32,14 @@ type carInvSchema struct {
 }
 
 type carResults struct {
-	Make    string
-	Model   string
-	Mileage string
-	Term    string
+	Id          string
+	Make        string
+	Model       string
+	Description string
+	Mileage     string
+	Price       string
+	Term        string
+	Provider    string
 }
 
 func init() {
@@ -45,14 +49,14 @@ func init() {
 func main() {
 
 	http.HandleFunc("/", index)
-	http.HandleFunc("/deals", parsedCSV)
+	http.HandleFunc("/deals", deals)
 	http.ListenAndServe(":8080", nil)
 }
 
 func index(w http.ResponseWriter, req *http.Request) {
 
 	if req.Method == http.MethodPost {
-		db, err := sql.Open("mysql", "root:Pass1(127.0.0.1:3306)/carproject")
+		db, err := sql.Open("mysql", "root:Pass2@tcp(127.0.0.1:3306)/carproject")
 		if err != nil {
 			log.Fatal("Unable to open connection to db")
 		}
@@ -174,22 +178,22 @@ func index(w http.ResponseWriter, req *http.Request) {
 }
 
 //displaying data
-func parsedCSV(w http.ResponseWriter, req *http.Request) {
+func deals(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
 	dbData := []carResults{}
 	searchResults := make(map[string]string)
 	if req.Method == http.MethodGet {
-		db, err := sql.Open("mysql", "root:Pass1(127.0.0.1:3306)/carproject")
+		db, err := sql.Open("mysql", "root:Pass@tcp(127.0.0.1:3306)/carproject")
 		if err != nil {
 			log.Fatal("Unable to open connection to db")
 		}
 		defer db.Close()
 
 		query := req.URL.Query()
-		make := query.Get("make")
-		if len(make) > 0 {
-			searchResults["make"] = make
+		makeQuery := query.Get("make")
+		if len(makeQuery) > 0 {
+			searchResults["make"] = makeQuery
 		}
 		query = req.URL.Query()
 		model := query.Get("model")
@@ -207,31 +211,41 @@ func parsedCSV(w http.ResponseWriter, req *http.Request) {
 			searchResults["term"] = term
 		}
 
+		args := []string{}
 		var addToQuery string
-
+		var queryArray []string
+		var stringQuery = "SELECT * FROM carinv"
 		for key, value := range searchResults {
-			addToQuery = addToQuery + " AND " + key + "=" + value
+			if value != "" {
+				addToQuery = key + "=" + " ?"
+			}
+			queryArray = append(queryArray, addToQuery)
+			args = append(args, value)
 		}
 
-		addToQuery = strings.Replace(addToQuery, " AND ", "", 1)
+		if len(args) != 0 {
+			stringQuery += " WHERE " + strings.Join(queryArray, " AND ")
+		}
+		argInterface := make([]interface{}, len(args))
+		for i, v := range args {
+			argInterface[i] = v
+		}
+		rows, err := db.Query(stringQuery, argInterface...)
+		if err != nil {
+			log.Fatalf("Unable to query rows %s", err)
+		}
 
-		// var queryString string
-		// queryString = queryString + `SELECT * FROM carinv WHERE` + addToQuery
-		rows, err := db.Query(`SELECT * FROM carinv WHERE ? `, addToQuery)
-		check(err)
 		defer rows.Close()
 		for rows.Next() {
 			carresults := carResults{}
-			err = rows.Scan(&carresults.Make, &carresults.Model, &carresults.Mileage, &carresults.Term)
+			err = rows.Scan(&carresults.Id, &carresults.Make, &carresults.Model, &carresults.Description, &carresults.Mileage, &carresults.Price, &carresults.Term, &carresults.Provider)
 			check(err)
 			dbData = append(dbData, carresults)
-			fmt.Fprintln(w, "LINE 228 RETRIEVED RECORD:", carresults)
-			fmt.Println("LINE 229 APPENDED DATA:", dbData)
 		}
 
 	}
 
-	err := tpl.ExecuteTemplate(w, "parseddata.gohtml", nil)
+	err := tpl.ExecuteTemplate(w, "parseddata.gohtml", dbData)
 	if err != nil {
 		log.Fatal("Unable to execute template")
 	}
