@@ -56,7 +56,7 @@ func main() {
 func index(w http.ResponseWriter, req *http.Request) {
 
 	if req.Method == http.MethodPost {
-		db, err := sql.Open("mysql", "root:KDaisy!22@tcp(127.0.0.1:3306)/carproject")
+		db, err := sql.Open("mysql", "root:pass@tcp(127.0.0.1:3306)/carproject")
 		if err != nil {
 			log.Fatal("Unable to open connection to db")
 		}
@@ -187,7 +187,7 @@ func deals(w http.ResponseWriter, req *http.Request) {
 	dbData := []carResults{}
 	searchResults := make(map[string]string)
 	if req.Method == http.MethodGet {
-		db, err := sql.Open("mysql", "root:KDaisy!22@tcp(127.0.0.1:3306)/carproject")
+		db, err := sql.Open("mysql", "root:pass@tcp(127.0.0.1:3306)/carproject")
 		if err != nil {
 			log.Fatalf("Unable to open connection to db %s", err)
 		}
