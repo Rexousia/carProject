@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/csv"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -17,8 +16,6 @@ import (
 var tpl *template.Template
 
 var carinv []carInvSchema
-
-// var pipelineCarInv []carInvSchema
 
 type carInvSchema struct {
 	Id          string
@@ -50,13 +47,16 @@ func main() {
 
 	http.HandleFunc("/", index)
 	http.HandleFunc("/deals", deals)
-	http.ListenAndServe(":8080", nil)
+	err := http.ListenAndServe(":8080", nil)
+	if err != nil {
+		log.Fatalf("failed to start the server: %v", err)
+	}
 }
 
 func index(w http.ResponseWriter, req *http.Request) {
 
 	if req.Method == http.MethodPost {
-		db, err := sql.Open("mysql", "root:Pass2@tcp(127.0.0.1:3306)/carproject")
+		db, err := sql.Open("mysql", "root:KDaisy!22@tcp(127.0.0.1:3306)/carproject")
 		if err != nil {
 			log.Fatal("Unable to open connection to db")
 		}
@@ -166,7 +166,7 @@ func index(w http.ResponseWriter, req *http.Request) {
 			}
 		}
 
-		//clearing out the carinv variable to keep healthy duplicate logging
+		//clearing out the carinv variable to keep healthy logging
 		carinv = []carInvSchema{}
 
 		//redirecting to /deals
@@ -174,85 +174,120 @@ func index(w http.ResponseWriter, req *http.Request) {
 	}
 
 	err := tpl.ExecuteTemplate(w, "index.gohtml", nil)
-	check(err)
+	if err != nil {
+		log.Fatalln()
+	}
 }
 
 //displaying data
 func deals(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
+	//struct for data to be passed into
 	dbData := []carResults{}
 	searchResults := make(map[string]string)
 	if req.Method == http.MethodGet {
-		db, err := sql.Open("mysql", "root:Pass@tcp(127.0.0.1:3306)/carproject")
+		db, err := sql.Open("mysql", "root:KDaisy!22@tcp(127.0.0.1:3306)/carproject")
 		if err != nil {
-			log.Fatal("Unable to open connection to db")
+			log.Fatalf("Unable to open connection to db %s", err)
 		}
 		defer db.Close()
 
+		// GET QUERY
 		query := req.URL.Query()
+		//STORE QUERY
 		makeQuery := query.Get("make")
 		if len(makeQuery) > 0 {
+			//STORIND INSIDE OF MAP
 			searchResults["make"] = makeQuery
 		}
+		// GET QUERY
 		query = req.URL.Query()
+		//STORE QUERY
 		model := query.Get("model")
 		if len(model) > 0 {
+			//STORIND INSIDE OF MAP
 			searchResults["model"] = model
 		}
+		// GET QUERY
 		query = req.URL.Query()
+		//STORE QUERY
 		mileage := query.Get("mileage")
 		if len(mileage) > 0 {
+			//STORING INSIDE OF MAP
 			searchResults["mileage"] = mileage
 		}
+		// GET QUERY
 		query = req.URL.Query()
+		//STORE QUERY
 		term := query.Get("term")
 		if len(term) > 0 {
+			//STORING INSIDE OF MAP
 			searchResults["term"] = term
 		}
 
+		//CREATING A SLICE TO STORE THE VALUES INSIDE OF
 		args := []string{}
+
+		//CREATING A PORTION OF THE QUERY STRING TO CONCATENATE AND STORE INSIDE OF THE ARRAY
 		var addToQuery string
+
+		//CREATING AN ARRAY TO STORE addToQuery
 		var queryArray []string
+
+		//BASE STRING QUERY TO BUILD OFF OF
 		var stringQuery = "SELECT * FROM carinv"
+
+		//RANGING OVER MAP AND CREATING MORE VARIABLE FOR THE DB
 		for key, value := range searchResults {
 			if value != "" {
 				addToQuery = key + "=" + " ?"
 			}
+			//appending each sql param inside of an array
 			queryArray = append(queryArray, addToQuery)
+			//passing values into the slice
 			args = append(args, value)
 		}
 
+		//CREATING THE STRING QUERY FOR THE DB DESIGN
 		if len(args) != 0 {
 			stringQuery += " WHERE " + strings.Join(queryArray, " AND ")
 		}
+
+		//CONVERTING ARGS TO VARIADIC PARAMETER OF ANY TIME
 		argInterface := make([]interface{}, len(args))
 		for i, v := range args {
+			//WRITING THE VALUES INTO ARGINTERFACE
 			argInterface[i] = v
 		}
+
+		//PASSING THE QUERY INTO ROWS
 		rows, err := db.Query(stringQuery, argInterface...)
 		if err != nil {
 			log.Fatalf("Unable to query rows %s", err)
 		}
-
+		//CLOSE AT END OF CODE BLOCK
 		defer rows.Close()
+
+		//LOOP OVER ROWS IF TRUE CONTINUE
 		for rows.Next() {
+			//INITIALIZING VARIABLE TO STORE DB VALUES INTO
 			carresults := carResults{}
+			//SCANNING VALUES INTO carrresults
 			err = rows.Scan(&carresults.Id, &carresults.Make, &carresults.Model, &carresults.Description, &carresults.Mileage, &carresults.Price, &carresults.Term, &carresults.Provider)
-			check(err)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			//APPENDING THE DATA TO BE PIPELINED INTO THE TEMPLATE
 			dbData = append(dbData, carresults)
 		}
 
 	}
 
+	//EXECUTING THE TEMPLATE AND PASSING THE DBDATA
 	err := tpl.ExecuteTemplate(w, "parseddata.gohtml", dbData)
 	if err != nil {
 		log.Fatal("Unable to execute template")
-	}
-}
-
-func check(err error) {
-	if err != nil {
-		fmt.Println(err)
 	}
 }
